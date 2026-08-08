@@ -259,8 +259,12 @@ function updateAudioEnergy(dt: number) {
   const tau = energyTarget > audioEnergy ? 0.065 : 0.2
   audioEnergy += (energyTarget - audioEnergy) * (1 - Math.exp(-dt / tau))
   if (Math.abs(energyTarget - audioEnergy) < 0.002) audioEnergy = energyTarget
+  const sceneCompensation = 1 + smoothstep(0.12, 0.72, displayProgress) * 0.95
+  const visualEnergy = clamp(audioEnergy * sceneCompensation)
   root.style.setProperty('--audio-energy', audioEnergy.toFixed(4))
+  root.style.setProperty('--audio-visual-energy', visualEnergy.toFixed(4))
   audio.dataset.energy = audioEnergy.toFixed(3)
+  audio.dataset.visualEnergy = visualEnergy.toFixed(3)
 }
 
 function updateAudio(dt: number) {
@@ -315,6 +319,12 @@ function tick(now: number) {
   root.style.setProperty('--kinetic-shift', `${clamp(scrollVelocity * 2.4, -5, 5).toFixed(2)}px`)
   root.style.setProperty('--kinetic-blur', `${clamp(Math.abs(scrollVelocity) * 0.55, 0, 1.2).toFixed(2)}px`)
   root.style.setProperty('--kinetic-track', `${(0.08 + clamp(Math.abs(scrollVelocity) * 0.008, 0, 0.035)).toFixed(3)}em`)
+  const aiSignal = smoothstep(0.045, 0.29, displayProgress)
+  const pixelResolve = smoothstep(0.285, 0.48, displayProgress)
+  root.style.setProperty('--ai-sweep', `${(-55 + aiSignal * 210).toFixed(1)}%`)
+  root.style.setProperty('--pixel-shift', `${((1 - pixelResolve) * 9).toFixed(2)}px`)
+  root.style.setProperty('--pixel-opacity', (0.14 + (1 - pixelResolve) * 0.58).toFixed(3))
+  root.style.setProperty('--pixel-size', `${(7 + (1 - pixelResolve) * 5).toFixed(2)}px`)
 
   if (!reducedMotionQuery.matches) {
     warmMedia(displayProgress)
