@@ -913,6 +913,19 @@ button {
   border-color: rgba(224, 239, 247, .8);
 }
 
+.replay-button span {
+  color: rgba(199, 224, 237, .7);
+  font-size: .72rem;
+  font-weight: 400;
+  line-height: 1;
+  transition: color 180ms ease, transform 220ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.replay-button:hover span {
+  color: #edf9ff;
+  transform: translateY(-2px);
+}
+
 .final-actions .portfolio-link,
 .final-actions .replay-button {
   justify-content: center;
