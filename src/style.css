@@ -692,11 +692,20 @@ button {
 }
 
 .final-actions {
+  position: relative;
   display: flex;
-  gap: clamp(.9rem, 1.6vw, 1.5rem);
+  gap: .45rem;
   align-items: center;
   justify-content: center;
+  width: fit-content;
+  max-width: 100%;
   margin-top: 1.8rem;
+  margin-inline: auto;
+  border: 1px solid rgba(213, 232, 242, .18);
+  padding: .42rem;
+  background: linear-gradient(115deg, rgba(3, 8, 11, .78), rgba(3, 7, 10, .58));
+  box-shadow: 0 14px 48px rgba(0, 0, 0, .34), inset 0 1px rgba(240, 249, 253, .035);
+  backdrop-filter: blur(14px) saturate(.82);
 }
 
 .contact-button {
@@ -707,15 +716,16 @@ button {
   justify-content: center;
   min-height: 48px;
   overflow: hidden;
-  border: 1px solid rgba(212, 232, 243, .42);
+  border: 1px solid rgba(222, 239, 248, .68);
   padding: .85rem 1.35rem;
   color: #f7fbfd;
-  background: linear-gradient(115deg, rgba(196, 226, 243, .14), rgba(96, 137, 159, .03));
-  box-shadow: inset 0 0 24px rgba(188, 226, 247, .04), 0 0 34px rgba(126, 181, 211, .06);
-  font-size: .63rem;
+  background: linear-gradient(115deg, rgba(198, 228, 244, .2), rgba(79, 117, 138, .1));
+  box-shadow: inset 0 0 28px rgba(188, 226, 247, .07), 0 0 34px rgba(126, 181, 211, .1);
+  font-size: .67rem;
   font-weight: 700;
   letter-spacing: .18em;
   text-decoration: none;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, .78);
   text-transform: uppercase;
   transition: border-color 220ms ease, box-shadow 260ms ease, transform 260ms cubic-bezier(.22, 1, .36, 1);
 }
@@ -745,11 +755,12 @@ button {
   align-items: center;
   min-height: 44px;
   border-bottom: 1px solid rgba(211, 229, 239, .26);
-  color: rgba(242, 246, 248, .72);
-  font-size: .6rem;
+  color: rgba(246, 249, 251, .88);
+  font-size: .63rem;
   font-weight: 650;
   letter-spacing: .16em;
   text-decoration: none;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, .92);
   text-transform: uppercase;
   transition: color 180ms ease, border-color 180ms ease;
 }
@@ -796,6 +807,25 @@ button {
 .replay-button:hover {
   color: #fff;
   border-color: rgba(224, 239, 247, .8);
+}
+
+.final-actions .portfolio-link,
+.final-actions .replay-button {
+  justify-content: center;
+  min-width: 8.8rem;
+  min-height: 48px;
+  border: 1px solid rgba(213, 232, 242, .12);
+  padding: .8rem 1rem;
+  background: rgba(1, 4, 6, .38);
+  color: rgba(246, 249, 251, .9);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, .92);
+  white-space: nowrap;
+}
+
+.final-actions .portfolio-link:hover,
+.final-actions .replay-button:hover {
+  border-color: rgba(222, 239, 248, .48);
+  background: rgba(164, 207, 230, .09);
 }
 
 .phase-meter {
@@ -895,13 +925,21 @@ button {
 
   .final-actions {
     flex-wrap: wrap;
-    gap: .5rem 1.1rem;
+    gap: .4rem;
+    width: min(100%, 21rem);
     margin-top: 1.45rem;
+    padding: .4rem;
   }
 
   .contact-button {
     flex-basis: 100%;
     max-width: 15rem;
+  }
+
+  .final-actions .portfolio-link,
+  .final-actions .replay-button {
+    flex: 1 1 8rem;
+    min-width: 0;
   }
 
   .chapter-copy {
