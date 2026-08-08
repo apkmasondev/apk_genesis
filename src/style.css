@@ -8,6 +8,7 @@
   --master-progress: 0;
   --pointer-x: 0px;
   --pointer-y: 0px;
+  --audio-energy: 0;
   --kinetic-shift: 0px;
   --kinetic-blur: 0px;
   --kinetic-track: .08em;
@@ -296,6 +297,22 @@ button {
     linear-gradient(180deg, rgba(2, 3, 4, .16), transparent 35%, rgba(2, 3, 4, .18));
   mix-blend-mode: screen;
   pointer-events: none;
+}
+
+.ambient-glow::before {
+  position: absolute;
+  top: calc(50% + var(--pointer-y));
+  left: calc(50% + var(--pointer-x));
+  width: clamp(14rem, 32vmin, 31rem);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  content: "";
+  background: radial-gradient(circle, rgba(218, 242, 255, .42), rgba(145, 205, 237, .16) 28%, rgba(94, 163, 201, .055) 48%, transparent 70%);
+  filter: blur(12px);
+  opacity: clamp(0, calc(var(--audio-energy) * .78), .68);
+  transform: translate(-50%, -50%) scale(calc(.82 + var(--audio-energy) * .42));
+  transform-origin: center;
+  will-change: opacity, transform;
 }
 
 .vignette {
@@ -732,18 +749,20 @@ button {
   min-width: 15.5rem;
   min-height: 48px;
   overflow: hidden;
-  border: 1px solid rgba(226, 241, 249, .72);
+  border: 0;
   padding: .9rem 1.65rem;
-  color: #f7fbfd;
-  background: linear-gradient(105deg, rgba(2, 7, 10, .88), rgba(166, 210, 234, .16), rgba(2, 7, 10, .88));
-  box-shadow: inset 0 0 30px rgba(188, 226, 247, .08), 0 0 40px rgba(104, 165, 198, .12);
+  color: #dff5ff;
+  background: linear-gradient(105deg, rgba(57, 119, 151, .24), rgba(176, 224, 247, .2), rgba(57, 119, 151, .24));
+  background-size: 180% 100%;
+  box-shadow: inset 0 0 32px rgba(172, 225, 251, .08), 0 10px 38px rgba(80, 153, 192, .11);
+  clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
   font-size: .67rem;
   font-weight: 700;
   letter-spacing: .18em;
   text-decoration: none;
   text-shadow: 0 1px 10px rgba(0, 0, 0, .78);
   text-transform: uppercase;
-  transition: border-color 220ms ease, box-shadow 260ms ease, transform 260ms cubic-bezier(.22, 1, .36, 1);
+  transition: color 220ms ease, background-position 420ms cubic-bezier(.22, 1, .36, 1), box-shadow 260ms ease, transform 260ms cubic-bezier(.22, 1, .36, 1);
 }
 
 .contact-button::before {
@@ -755,9 +774,21 @@ button {
   transition: transform 600ms cubic-bezier(.22, 1, .36, 1);
 }
 
+.contact-button::after {
+  position: absolute;
+  top: 0;
+  right: 18%;
+  left: 18%;
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(224, 246, 255, .78), transparent);
+  opacity: .72;
+}
+
 .contact-button:hover {
-  border-color: rgba(239, 249, 253, .94);
-  box-shadow: inset 0 0 32px rgba(188, 226, 247, .12), 0 0 48px rgba(126, 181, 211, .2);
+  color: #f4fbff;
+  background-position: 100% 0;
+  box-shadow: inset 0 0 34px rgba(188, 232, 253, .14), 0 12px 46px rgba(96, 176, 218, .19);
   transform: translateY(-2px);
 }
 

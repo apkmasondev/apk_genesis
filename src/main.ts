@@ -70,6 +70,12 @@ audio.volume = 0
 let soundEnabled = false
 let audioVolume = 0
 let audioTarget = 0
+let audioEnergy = 0
+let audioContext: AudioContext | null = null
+let audioSource: MediaElementAudioSourceNode | null = null
+let audioAnalyser: AnalyserNode | null = null
+let audioFrequencyData: Uint8Array<ArrayBuffer> | null = null
+let audioAnalyserAttempted = false
 let resumeAfterVisibility = false
 document.body.append(audio)
 
@@ -203,6 +209,60 @@ function updatePhase(progress: number) {
   }
 }
 
+async function ensureAudioAnalyser() {
+  if (audioAnalyser && audioContext) {
+    if (audioContext.state === 'suspended') await audioContext.resume()
+    return
+  }
+  if (audioAnalyserAttempted) return
+  audioAnalyserAttempted = true
+
+  try {
+    audioContext = new AudioContext()
+    audioAnalyser = audioContext.createAnalyser()
+    audioAnalyser.fftSize = 64
+    audioAnalyser.smoothingTimeConstant = 0.76
+    audioSource = audioContext.createMediaElementSource(audio)
+    audioSource.connect(audioAnalyser)
+    audioAnalyser.connect(audioContext.destination)
+    audioFrequencyData = new Uint8Array(audioAnalyser.frequencyBinCount)
+    await audioContext.resume()
+  } catch {
+    // The soundtrack remains fully functional when Web Audio is unavailable.
+    if (audioSource && audioContext) {
+      try { audioSource.connect(audioContext.destination) } catch { /* Already connected. */ }
+    }
+    audioAnalyser = null
+    audioFrequencyData = null
+  }
+}
+
+function updateAudioEnergy(dt: number) {
+  let energyTarget = 0
+  const canReact = soundEnabled
+    && !audio.paused
+    && audioVolume > 0.002
+    && audioAnalyser
+    && audioFrequencyData
+    && !reducedMotionQuery.matches
+
+  if (canReact && audioAnalyser && audioFrequencyData) {
+    audioAnalyser.getByteFrequencyData(audioFrequencyData)
+    const end = Math.min(audioFrequencyData.length, 18)
+    let sum = 0
+    for (let index = 1; index < end; index += 1) sum += audioFrequencyData[index]
+    const average = end > 1 ? sum / (end - 1) / 255 : 0
+    const amplitude = clamp((average - 0.035) * 2.45)
+    energyTarget = amplitude * clamp(audioVolume / 0.28)
+  }
+
+  const tau = energyTarget > audioEnergy ? 0.065 : 0.2
+  audioEnergy += (energyTarget - audioEnergy) * (1 - Math.exp(-dt / tau))
+  if (Math.abs(energyTarget - audioEnergy) < 0.002) audioEnergy = energyTarget
+  root.style.setProperty('--audio-energy', audioEnergy.toFixed(4))
+  audio.dataset.energy = audioEnergy.toFixed(3)
+}
+
 function updateAudio(dt: number) {
   const tau = audioTarget > audioVolume ? 0.42 : 0.28
   const alpha = 1 - Math.exp(-dt / tau)
@@ -211,15 +271,22 @@ function updateAudio(dt: number) {
   audio.volume = clamp(audioVolume, 0, 0.28)
   audio.dataset.volume = audioVolume.toFixed(3)
 
-  if (!soundEnabled && audioVolume === 0 && !audio.paused) audio.pause()
+  updateAudioEnergy(dt)
+
+  if (!soundEnabled && audioVolume === 0 && !audio.paused) {
+    audio.pause()
+    if (audioContext?.state === 'running') void audioContext.suspend()
+  }
 }
 
 function needsAnotherFrame() {
   const progressMoving = Math.abs(targetProgress - displayProgress) > 0.00008
   const audioMoving = Math.abs(audioTarget - audioVolume) > 0.001
+  const audioReactive = soundEnabled && !audio.paused && audioAnalyser !== null
+  const haloSettling = audioEnergy > 0.002
   const pointerMoving = Math.abs(pointerTargetX - pointerX) > 0.01 || Math.abs(pointerTargetY - pointerY) > 0.01
   const seekPending = videoStates.some((state) => state.element.seeking || state.pendingTime !== null)
-  return progressMoving || audioMoving || pointerMoving || seekPending
+  return progressMoving || audioMoving || audioReactive || haloSettling || pointerMoving || seekPending
 }
 
 function tick(now: number) {
@@ -327,6 +394,7 @@ async function setSound(enabled: boolean) {
   if (soundEnabled) {
     audioTarget = 0.28
     try {
+      await ensureAudioAnalyser()
       await audio.play()
     } catch {
       soundEnabled = false
@@ -363,8 +431,12 @@ function onVisibilityChange() {
     animationFrame = 0
     resumeAfterVisibility = soundEnabled && !audio.paused
     audio.pause()
+    if (audioContext?.state === 'running') void audioContext.suspend()
   } else {
-    if (resumeAfterVisibility && soundEnabled) void audio.play()
+    if (resumeAfterVisibility && soundEnabled) {
+      void ensureAudioAnalyser()
+      void audio.play()
+    }
     resumeAfterVisibility = false
     updateScrollTarget()
     requestTick()
