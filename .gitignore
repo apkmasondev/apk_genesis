@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.vite/
+*.log
+
+# Archival source media remains local; the optimized public versions are shipped.
+Light_forms_digital_AI_core_202608082145.mp4
+AI_core_evolving_and_transforming_202608082150.mp4
+AI_core_final_form_animation_202608082151.mp4
+APK_Genesis.mp3
