@@ -11,6 +11,8 @@
   --audio-energy: 0;
   --audio-visual-energy: 0;
   --ai-sweep: -55%;
+  --ai-split: 0px;
+  --ai-accent-opacity: 0;
   --pixel-shift: 9px;
   --pixel-opacity: .72;
   --pixel-size: 12px;
@@ -649,6 +651,7 @@ button {
   isolation: isolate;
 }
 
+.chapter-ai h1::before,
 .chapter-ai h1::after,
 .chapter-pixels h2::after {
   position: absolute;
@@ -661,13 +664,23 @@ button {
   -webkit-text-fill-color: transparent;
 }
 
+.chapter-ai h1::before {
+  z-index: -1;
+  text-shadow:
+    calc(var(--ai-split) * -1) 0 rgba(91, 211, 255, .9),
+    var(--ai-split) 0 rgba(208, 126, 255, .7);
+  opacity: var(--ai-accent-opacity);
+  filter: blur(.25px);
+}
+
 .chapter-ai h1::after {
-  background-image: linear-gradient(100deg, transparent 0 28%, rgba(196, 232, 251, .18) 38%, rgba(235, 249, 255, .94) 50%, rgba(164, 216, 243, .22) 62%, transparent 72% 100%);
+  background-image: linear-gradient(100deg, transparent 0 24%, rgba(77, 194, 242, .34) 36%, rgba(130, 224, 255, .96) 46%, #fff 50%, rgba(211, 143, 255, .78) 58%, transparent 74% 100%);
   background-position: var(--ai-sweep) 50%;
   background-repeat: no-repeat;
-  background-size: 52% 100%;
-  mix-blend-mode: screen;
-  opacity: .88;
+  background-size: 68% 100%;
+  mix-blend-mode: normal;
+  opacity: .98;
+  filter: drop-shadow(0 0 12px rgba(125, 218, 255, .55));
 }
 
 .chapter-pixels h2::after {
@@ -1218,6 +1231,7 @@ button {
     transform: none;
   }
 
+  .chapter-ai h1::before,
   .chapter-ai h1::after,
   .chapter-pixels h2::after {
     display: none;
@@ -1242,6 +1256,7 @@ button {
     display: none;
   }
 
+  .chapter-ai h1::before,
   .chapter-ai h1::after,
   .chapter-pixels h2::after {
     display: none;
