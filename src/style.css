@@ -20,7 +20,15 @@
 html {
   min-width: 320px;
   background: #020304;
-  scrollbar-color: #4b535c #020304;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 body {
@@ -693,34 +701,42 @@ button {
 
 .final-actions {
   position: relative;
-  display: flex;
-  gap: .45rem;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: .35rem 2rem;
   align-items: center;
   justify-content: center;
   width: fit-content;
   max-width: 100%;
   margin-top: 1.8rem;
   margin-inline: auto;
-  border: 1px solid rgba(213, 232, 242, .18);
-  padding: .42rem;
-  background: linear-gradient(115deg, rgba(3, 8, 11, .78), rgba(3, 7, 10, .58));
-  box-shadow: 0 14px 48px rgba(0, 0, 0, .34), inset 0 1px rgba(240, 249, 253, .035);
-  backdrop-filter: blur(14px) saturate(.82);
+}
+
+.final-actions::before {
+  position: absolute;
+  z-index: -1;
+  inset: -2.6rem -5rem -2rem;
+  content: "";
+  background: radial-gradient(ellipse at center, rgba(1, 4, 6, .8), rgba(1, 4, 6, .54) 43%, transparent 74%);
+  pointer-events: none;
 }
 
 .contact-button {
   position: relative;
+  grid-column: 1 / -1;
+  justify-self: center;
   display: inline-flex;
   gap: 1.1rem;
   align-items: center;
   justify-content: center;
+  min-width: 15.5rem;
   min-height: 48px;
   overflow: hidden;
-  border: 1px solid rgba(222, 239, 248, .68);
-  padding: .85rem 1.35rem;
+  border: 1px solid rgba(226, 241, 249, .72);
+  padding: .9rem 1.65rem;
   color: #f7fbfd;
-  background: linear-gradient(115deg, rgba(198, 228, 244, .2), rgba(79, 117, 138, .1));
-  box-shadow: inset 0 0 28px rgba(188, 226, 247, .07), 0 0 34px rgba(126, 181, 211, .1);
+  background: linear-gradient(105deg, rgba(2, 7, 10, .88), rgba(166, 210, 234, .16), rgba(2, 7, 10, .88));
+  box-shadow: inset 0 0 30px rgba(188, 226, 247, .08), 0 0 40px rgba(104, 165, 198, .12);
   font-size: .67rem;
   font-weight: 700;
   letter-spacing: .18em;
@@ -740,8 +756,8 @@ button {
 }
 
 .contact-button:hover {
-  border-color: rgba(224, 241, 250, .82);
-  box-shadow: inset 0 0 28px rgba(188, 226, 247, .08), 0 0 42px rgba(126, 181, 211, .14);
+  border-color: rgba(239, 249, 253, .94);
+  box-shadow: inset 0 0 32px rgba(188, 226, 247, .12), 0 0 48px rgba(126, 181, 211, .2);
   transform: translateY(-2px);
 }
 
@@ -812,20 +828,24 @@ button {
 .final-actions .portfolio-link,
 .final-actions .replay-button {
   justify-content: center;
-  min-width: 8.8rem;
-  min-height: 48px;
-  border: 1px solid rgba(213, 232, 242, .12);
-  padding: .8rem 1rem;
-  background: rgba(1, 4, 6, .38);
-  color: rgba(246, 249, 251, .9);
+  min-width: 8.25rem;
+  min-height: 42px;
+  border: 0;
+  border-bottom: 1px solid rgba(218, 235, 244, .3);
+  padding: .65rem 0;
+  background: transparent;
+  color: rgba(246, 249, 251, .84);
   text-shadow: 0 1px 10px rgba(0, 0, 0, .92);
   white-space: nowrap;
+  transition: color 180ms ease, border-color 180ms ease, transform 220ms cubic-bezier(.22, 1, .36, 1);
 }
 
 .final-actions .portfolio-link:hover,
 .final-actions .replay-button:hover {
-  border-color: rgba(222, 239, 248, .48);
-  background: rgba(164, 207, 230, .09);
+  border-color: rgba(232, 244, 250, .78);
+  background: transparent;
+  color: #fff;
+  transform: translateY(-1px);
 }
 
 .phase-meter {
@@ -924,21 +944,19 @@ button {
   }
 
   .final-actions {
-    flex-wrap: wrap;
-    gap: .4rem;
+    grid-template-columns: 1fr 1fr;
+    gap: .25rem 1rem;
     width: min(100%, 21rem);
     margin-top: 1.45rem;
-    padding: .4rem;
   }
 
   .contact-button {
-    flex-basis: 100%;
-    max-width: 15rem;
+    width: min(100%, 15rem);
+    min-width: 0;
   }
 
   .final-actions .portfolio-link,
   .final-actions .replay-button {
-    flex: 1 1 8rem;
     min-width: 0;
   }
 
@@ -1101,6 +1119,17 @@ button {
 }
 
 @media (forced-colors: active) {
+  html {
+    scrollbar-width: auto;
+  }
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar {
+    display: initial;
+    width: auto;
+    height: auto;
+  }
+
   .vignette,
   .grain,
   .ambient-glow {
