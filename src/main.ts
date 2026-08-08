@@ -24,6 +24,7 @@ const loader = document.querySelector<HTMLElement>('.loader')!
 const chapters = [...document.querySelectorAll<HTMLElement>('.chapter')]
 const soundButton = document.querySelector<HTMLButtonElement>('.sound-toggle')!
 const soundLabel = document.querySelector<HTMLElement>('.sound-label')!
+const originCore = document.querySelector<HTMLButtonElement>('.origin-core')!
 const replayButton = document.querySelector<HTMLButtonElement>('.replay-button')!
 const skipTarget = document.querySelector<HTMLElement>('.skip-target')!
 const phaseCode = document.querySelector<HTMLElement>('.phase-code')!
@@ -188,6 +189,10 @@ function updateCopy(progress: number) {
     chapter.style.setProperty('--chapter-y', `${(1 - smoothstep(0, 1, entrance)) * 16}px`)
     chapter.classList.toggle('is-interactive', opacity > 0.72)
   }
+
+  const coreIsActive = progress < 0.035
+  originCore.classList.toggle('is-active', coreIsActive)
+  originCore.tabIndex = coreIsActive ? 0 : -1
 }
 
 function updatePhase(progress: number) {
@@ -312,8 +317,8 @@ function initializeVideo(state: VideoState, index: number) {
   }
 }
 
-async function toggleSound() {
-  soundEnabled = !soundEnabled
+async function setSound(enabled: boolean) {
+  soundEnabled = enabled
   soundButton.setAttribute('aria-pressed', String(soundEnabled))
   soundButton.setAttribute('aria-label', soundEnabled ? 'Turn soundtrack off' : 'Turn soundtrack on')
   soundLabel.textContent = soundEnabled ? 'Sound on' : 'Sound off'
@@ -337,6 +342,21 @@ async function toggleSound() {
   requestTick()
 }
 
+function toggleSound() {
+  return setSound(!soundEnabled)
+}
+
+async function activateOrigin() {
+  root.classList.add('origin-activated')
+  if (!soundEnabled) await setSound(true)
+
+  const destination = runwayStart + runwayLength * 0.055
+  window.scrollTo({
+    top: destination,
+    behavior: reducedMotionQuery.matches ? 'auto' : 'smooth',
+  })
+}
+
 function onVisibilityChange() {
   if (document.hidden) {
     if (animationFrame) cancelAnimationFrame(animationFrame)
@@ -352,7 +372,8 @@ function onVisibilityChange() {
 }
 
 function onPointerMove(event: PointerEvent) {
-  if (!finePointerQuery.matches || reducedMotionQuery.matches || displayProgress < 0.89) return
+  const coreOrFinalIsVisible = displayProgress < 0.09 || displayProgress >= 0.89
+  if (!finePointerQuery.matches || reducedMotionQuery.matches || !coreOrFinalIsVisible) return
   pointerTargetX = ((event.clientX / window.innerWidth) * 2 - 1) * 5
   pointerTargetY = ((event.clientY / window.innerHeight) * 2 - 1) * 5
   requestTick()
@@ -413,6 +434,7 @@ window.addEventListener('orientationchange', onResize, { passive: true })
 window.addEventListener('pointermove', onPointerMove, { passive: true })
 document.addEventListener('visibilitychange', onVisibilityChange)
 soundButton.addEventListener('click', () => void toggleSound())
+originCore.addEventListener('click', () => void activateOrigin())
 skipLink.addEventListener('click', skipToFinal)
 replayButton.addEventListener('click', () => window.scrollTo({ top: runwayStart, behavior: reducedMotionQuery.matches ? 'auto' : 'smooth' }))
 reducedMotionQuery.addEventListener('change', onReducedMotionChange)
