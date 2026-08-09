@@ -51,6 +51,8 @@ body {
 button,
 a {
   color: inherit;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 button {
@@ -159,14 +161,12 @@ button {
   transition: opacity 180ms ease, transform 260ms cubic-bezier(.22, 1, .36, 1);
 }
 
-.sound-toggle:hover,
 .sound-toggle:focus-visible,
 .sound-on .sound-toggle {
   color: #fff;
   text-shadow: 0 0 18px rgba(185, 224, 245, .18);
 }
 
-.sound-toggle:hover::after,
 .sound-toggle:focus-visible::after {
   opacity: .72;
   transform: scaleX(1);
@@ -488,13 +488,11 @@ button {
   letter-spacing: .14em;
 }
 
-.origin-core:hover .core-node,
 .origin-core:focus-visible .core-node {
   box-shadow: 0 0 10px #fff, 0 0 32px rgba(183, 225, 249, .96), 0 0 78px rgba(137, 197, 231, .64);
   transform: translate(-50%, -50%) scale(1.38);
 }
 
-.origin-core:hover .core-label,
 .origin-core:focus-visible .core-label {
   opacity: .9;
   transform: translate(-50%, .2rem);
@@ -855,17 +853,6 @@ button {
   opacity: .72;
 }
 
-.contact-button:hover {
-  color: #f4fbff;
-  background-position: 100% 0;
-  box-shadow: inset 0 0 34px rgba(188, 232, 253, .14), 0 12px 46px rgba(96, 176, 218, .19);
-  transform: translateY(-2px);
-}
-
-.contact-button:hover::before {
-  transform: translateX(120%);
-}
-
 .portfolio-link {
   display: inline-flex;
   gap: .65rem;
@@ -880,11 +867,6 @@ button {
   text-shadow: 0 1px 10px rgba(0, 0, 0, .92);
   text-transform: uppercase;
   transition: color 180ms ease, border-color 180ms ease;
-}
-
-.portfolio-link:hover {
-  border-color: rgba(224, 239, 247, .72);
-  color: #fff;
 }
 
 .final-action {
@@ -921,22 +903,12 @@ button {
   pointer-events: auto;
 }
 
-.replay-button:hover {
-  color: #fff;
-  border-color: rgba(224, 239, 247, .8);
-}
-
 .replay-button span {
   color: rgba(199, 224, 237, .7);
   font-size: .72rem;
   font-weight: 400;
   line-height: 1;
   transition: color 180ms ease, transform 220ms cubic-bezier(.22, 1, .36, 1);
-}
-
-.replay-button:hover span {
-  color: #edf9ff;
-  transform: translateY(-2px);
 }
 
 .final-actions .portfolio-link,
@@ -954,12 +926,60 @@ button {
   transition: color 180ms ease, border-color 180ms ease, transform 220ms cubic-bezier(.22, 1, .36, 1);
 }
 
-.final-actions .portfolio-link:hover,
-.final-actions .replay-button:hover {
-  border-color: rgba(232, 244, 250, .78);
-  background: transparent;
-  color: #fff;
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .sound-toggle:hover {
+    color: #fff;
+    text-shadow: 0 0 18px rgba(185, 224, 245, .18);
+  }
+
+  .sound-toggle:hover::after {
+    opacity: .72;
+    transform: scaleX(1);
+  }
+
+  .origin-core:hover .core-node {
+    box-shadow: 0 0 10px #fff, 0 0 32px rgba(183, 225, 249, .96), 0 0 78px rgba(137, 197, 231, .64);
+    transform: translate(-50%, -50%) scale(1.38);
+  }
+
+  .origin-core:hover .core-label {
+    opacity: .9;
+    transform: translate(-50%, .2rem);
+  }
+
+  .contact-button:hover {
+    color: #f4fbff;
+    background-position: 100% 0;
+    box-shadow: inset 0 0 34px rgba(188, 232, 253, .14), 0 12px 46px rgba(96, 176, 218, .19);
+    transform: translateY(-2px);
+  }
+
+  .contact-button:hover::before {
+    transform: translateX(120%);
+  }
+
+  .portfolio-link:hover {
+    border-color: rgba(224, 239, 247, .72);
+    color: #fff;
+  }
+
+  .replay-button:hover {
+    color: #fff;
+    border-color: rgba(224, 239, 247, .8);
+  }
+
+  .replay-button:hover span {
+    color: #edf9ff;
+    transform: translateY(-2px);
+  }
+
+  .final-actions .portfolio-link:hover,
+  .final-actions .replay-button:hover {
+    border-color: rgba(232, 244, 250, .78);
+    background: transparent;
+    color: #fff;
+    transform: translateY(-1px);
+  }
 }
 
 .phase-meter {
