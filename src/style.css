@@ -369,6 +369,23 @@ button {
   pointer-events: none;
 }
 
+.performance-lite .ambient-glow {
+  mix-blend-mode: normal;
+}
+
+.performance-lite .ambient-glow::before {
+  filter: blur(8px);
+}
+
+.performance-lite .ambient-glow::after {
+  display: none;
+}
+
+.performance-lite .grain {
+  opacity: .025;
+  mix-blend-mode: normal;
+}
+
 .loader {
   position: absolute;
   z-index: 30;

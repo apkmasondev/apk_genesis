@@ -1,5 +1,7 @@
 import './style.css'
 
+type VideoLoadMode = 'none' | 'metadata' | 'auto'
+
 type VideoState = {
   element: HTMLVideoElement
   start: number
@@ -7,11 +9,16 @@ type VideoState = {
   source: string
   loaded: boolean
   loading: boolean
+  loadMode: VideoLoadMode
   pendingTime: number | null
   lastSeekAt: number
+  latencySampledAt: number
+  seekLatency: number
   presentedTime: number | null
   awaitingFrame: boolean
   frameCallbackId: number | null
+  renderedOpacity: string
+  renderedZIndex: string
 }
 
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value))
@@ -21,6 +28,7 @@ const smoothstep = (from: number, to: number, value: number) => {
 }
 
 const root = document.documentElement
+const bootstrapTime = performance.now()
 const runway = document.querySelector<HTMLElement>('.runway')!
 const skipLink = document.querySelector<HTMLAnchorElement>('.skip-link')!
 const loader = document.querySelector<HTMLElement>('.loader')!
@@ -48,11 +56,16 @@ function createVideoState(element: HTMLVideoElement, start: number, end: number,
     source: mediaUrl(path),
     loaded: false,
     loading: false,
+    loadMode: 'none',
     pendingTime: null,
     lastSeekAt: 0,
+    latencySampledAt: 0,
+    seekLatency: 48,
     presentedTime: null,
     awaitingFrame: false,
     frameCallbackId: null,
+    renderedOpacity: '',
+    renderedZIndex: '',
   }
 }
 
@@ -69,8 +82,6 @@ let displayProgress = 0
 let previousTarget = 0
 let lastFrameTime = performance.now()
 let animationFrame = 0
-let warmedSecond = false
-let warmedThird = false
 let lastScrollTime = performance.now()
 let scrollVelocity = 0
 let pointerTargetX = 0
@@ -78,6 +89,15 @@ let pointerTargetY = 0
 let pointerX = 0
 let pointerY = 0
 let hasMeasured = false
+let secondWarmupHandle: number | null = null
+let secondWarmupUsesIdleCallback = false
+let performanceLite = false
+let slowFrameScore = 0
+let stableFrameCount = 0
+let performanceLiteSince = 0
+let lastAudioEnergyAt = performance.now()
+const rootStyleCache = new Map<string, string>()
+root.dataset.performance = 'full'
 
 const audio = new Audio()
 audio.id = 'genesis-soundtrack'
@@ -98,6 +118,12 @@ let audioSourceLoaded = false
 let soundOperation = 0
 let resumeAfterVisibility = false
 document.body.append(audio)
+
+function setRootProperty(name: string, value: string) {
+  if (rootStyleCache.get(name) === value) return
+  rootStyleCache.set(name, value)
+  root.style.setProperty(name, value)
+}
 
 function setChapterAccessibility(chapter: HTMLElement, accessible: boolean) {
   const hidden = !accessible
@@ -146,22 +172,67 @@ function updateScrollTarget() {
   targetProgress = clamp((window.scrollY - runwayStart) / runwayLength)
 }
 
-function loadVideo(state: VideoState, priority: 'auto' | 'metadata' = 'auto') {
-  if (state.loading || state.loaded) return
+function loadVideo(state: VideoState, priority: Exclude<VideoLoadMode, 'none'> = 'auto') {
+  const requestedRank = priority === 'auto' ? 2 : 1
+  const currentRank = state.loadMode === 'auto' ? 2 : state.loadMode === 'metadata' ? 1 : 0
+  if (currentRank >= requestedRank) return
+
+  const firstRequest = state.loadMode === 'none'
+  state.loadMode = priority
+  if (state === videoStates[1] && priority === 'auto') cancelSecondVideoWarmup()
   state.loading = true
   state.element.preload = priority
-  state.element.src = state.source
+  if (firstRequest) state.element.src = state.source
   state.element.load()
 }
 
 function warmMedia(progress: number) {
-  if (!warmedSecond && progress > 0.1) {
-    warmedSecond = true
-    loadVideo(videoStates[1])
+  if (progress > 0.08) loadVideo(videoStates[1], 'auto')
+  else if (progress > 0.015) loadVideo(videoStates[1], 'metadata')
+
+  if (progress > 0.42) loadVideo(videoStates[2], 'auto')
+  else if (progress > 0.2) loadVideo(videoStates[2], 'metadata')
+}
+
+function cancelSecondVideoWarmup() {
+  if (secondWarmupHandle === null) return
+  if (secondWarmupUsesIdleCallback && typeof window.cancelIdleCallback === 'function') {
+    window.cancelIdleCallback(secondWarmupHandle)
+  } else {
+    window.clearTimeout(secondWarmupHandle)
   }
-  if (!warmedThird && progress > 0.26) {
-    warmedThird = true
-    loadVideo(videoStates[2])
+  secondWarmupHandle = null
+}
+
+function scheduleSecondVideoWarmup() {
+  if (secondWarmupHandle !== null || videoStates[1].loadMode === 'auto' || reducedMotionQuery.matches) return
+
+  const earliestWarmupAt = bootstrapTime + 650
+  if (performance.now() < earliestWarmupAt) {
+    secondWarmupUsesIdleCallback = false
+    secondWarmupHandle = window.setTimeout(() => {
+      secondWarmupHandle = null
+      scheduleSecondVideoWarmup()
+    }, earliestWarmupAt - performance.now())
+    return
+  }
+
+  const promote = () => {
+    secondWarmupHandle = null
+    if (reducedMotionQuery.matches || videoStates[1].loadMode === 'auto') return
+    if (performance.now() - lastScrollTime > 220) {
+      loadVideo(videoStates[1], 'auto')
+    } else {
+      scheduleSecondVideoWarmup()
+    }
+  }
+
+  if (typeof window.requestIdleCallback === 'function') {
+    secondWarmupUsesIdleCallback = true
+    secondWarmupHandle = window.requestIdleCallback(promote, { timeout: 1800 })
+  } else {
+    secondWarmupUsesIdleCallback = false
+    secondWarmupHandle = window.setTimeout(promote, 1200)
   }
 }
 
@@ -183,6 +254,13 @@ function cancelFrameWatch(state: VideoState) {
   state.awaitingFrame = false
 }
 
+function recordSeekLatency(state: VideoState, completedAt: number) {
+  if (state.lastSeekAt <= 0 || state.latencySampledAt === state.lastSeekAt) return
+  state.latencySampledAt = state.lastSeekAt
+  const latency = clamp(completedAt - state.lastSeekAt, 8, 650)
+  state.seekLatency += (latency - state.seekLatency) * 0.22
+}
+
 function watchPresentedFrame(state: VideoState) {
   const video = state.element
   if (state.frameCallbackId !== null || typeof video.requestVideoFrameCallback !== 'function') return false
@@ -192,6 +270,7 @@ function watchPresentedFrame(state: VideoState) {
     state.frameCallbackId = null
     state.awaitingFrame = false
     state.presentedTime = metadata.mediaTime
+    recordSeekLatency(state, _now)
     requestTick()
   })
   return true
@@ -207,8 +286,11 @@ function requestSeek(state: VideoState, desiredTime: number, now: number, opacit
   state.pendingTime = nearRest
     ? clamp(Math.round(boundedTime / FRAME) * FRAME, 0, safeDuration)
     : boundedTime
-  const minInterval = coarsePointerQuery.matches ? 46 : 32
-  if (state.awaitingFrame && now - state.lastSeekAt > 140) cancelFrameWatch(state)
+  const baseInterval = coarsePointerQuery.matches ? 46 : 32
+  const latencyInterval = clamp(state.seekLatency * 0.55, baseInterval, performanceLite ? 90 : 72)
+  const minInterval = performanceLite ? Math.max(66, latencyInterval) : latencyInterval
+  const frameTimeout = clamp(state.seekLatency * 3.2, 300, 650)
+  if (state.awaitingFrame && now - state.lastSeekAt > frameTimeout) cancelFrameWatch(state)
   if (video.seeking || state.awaitingFrame || now - state.lastSeekAt < minInterval) return
 
   const displayedTime = clamp(state.presentedTime ?? video.currentTime, 0, safeDuration)
@@ -234,8 +316,16 @@ function requestSeek(state: VideoState, desiredTime: number, now: number, opacit
 function updateVideos(progress: number, now: number) {
   videoStates.forEach((state, index) => {
     const opacity = videoOpacity(index, progress)
-    state.element.style.opacity = opacity.toFixed(4)
-    state.element.style.zIndex = String(opacity > 0.01 ? index + 1 : 0)
+    const opacityValue = opacity.toFixed(4)
+    const zIndexValue = String(opacity > 0.01 ? index + 1 : 0)
+    if (state.renderedOpacity !== opacityValue) {
+      state.renderedOpacity = opacityValue
+      state.element.style.opacity = opacityValue
+    }
+    if (state.renderedZIndex !== zIndexValue) {
+      state.renderedZIndex = zIndexValue
+      state.element.style.zIndex = zIndexValue
+    }
     if (opacity <= 0.015) {
       const duration = Number.isFinite(state.element.duration) ? state.element.duration : 10
       const boundaryTime = progress >= state.end ? Math.max(0, duration - FRAME * 0.5) : 0
@@ -341,13 +431,13 @@ function updateAudioEnergy(dt: number) {
   if (Math.abs(energyTarget - audioEnergy) < 0.002) audioEnergy = energyTarget
   const sceneCompensation = 1 + smoothstep(0.12, 0.72, displayProgress) * 0.95
   const visualEnergy = clamp(audioEnergy * sceneCompensation)
-  root.style.setProperty('--audio-energy', audioEnergy.toFixed(4))
-  root.style.setProperty('--audio-visual-energy', visualEnergy.toFixed(4))
+  setRootProperty('--audio-energy', audioEnergy.toFixed(4))
+  setRootProperty('--audio-visual-energy', visualEnergy.toFixed(4))
   audio.dataset.energy = audioEnergy.toFixed(3)
   audio.dataset.visualEnergy = visualEnergy.toFixed(3)
 }
 
-function updateAudio(dt: number) {
+function updateAudio(dt: number, now: number) {
   const tau = audioTarget > audioVolume ? 0.42 : 0.28
   const alpha = 1 - Math.exp(-dt / tau)
   audioVolume += (audioTarget - audioVolume) * alpha
@@ -355,12 +445,50 @@ function updateAudio(dt: number) {
   audio.volume = clamp(audioVolume, 0, 0.28)
   audio.dataset.volume = audioVolume.toFixed(3)
 
-  updateAudioEnergy(dt)
+  const energyInterval = performanceLite ? 1000 / 30 : 0
+  if (!energyInterval || now - lastAudioEnergyAt >= energyInterval) {
+    const energyDt = Math.min(0.1, Math.max(0.001, (now - lastAudioEnergyAt) / 1000))
+    lastAudioEnergyAt = now
+    updateAudioEnergy(energyDt)
+  }
 
   if (!soundEnabled && audioVolume === 0 && !audio.paused) {
     audio.pause()
     if (audioContext?.state === 'running') void audioContext.suspend().catch(() => {})
   }
+}
+
+function setPerformanceLite(enabled: boolean, now: number) {
+  if (performanceLite === enabled) return
+  performanceLite = enabled
+  performanceLiteSince = enabled ? now : 0
+  slowFrameScore = 0
+  stableFrameCount = 0
+  root.classList.toggle('performance-lite', enabled)
+  root.dataset.performance = enabled ? 'lite' : 'full'
+
+  if (enabled) {
+    setRootProperty('--cinematic-x', '0px')
+    setRootProperty('--cinematic-y', '0px')
+    setRootProperty('--cinematic-scale', '1.015')
+  }
+}
+
+function updatePerformanceMode(frameMs: number, now: number) {
+  const underLoad = Math.abs(targetProgress - displayProgress) > 0.00008
+    || videoStates.some((state) => state.element.seeking || state.awaitingFrame)
+    || (soundEnabled && !audio.paused)
+
+  if (!underLoad) return
+
+  if (!performanceLite) {
+    slowFrameScore = frameMs > 27 ? slowFrameScore + 1 : Math.max(0, slowFrameScore - 0.4)
+    if (slowFrameScore >= 8) setPerformanceLite(true, now)
+    return
+  }
+
+  stableFrameCount = frameMs < 23 ? stableFrameCount + 1 : 0
+  if (stableFrameCount >= 120 && now - performanceLiteSince > 5000) setPerformanceLite(false, now)
 }
 
 function needsAnotherFrame() {
@@ -375,8 +503,10 @@ function needsAnotherFrame() {
 
 function tick(now: number) {
   animationFrame = 0
-  const dt = Math.min(0.064, Math.max(0.001, (now - lastFrameTime) / 1000))
+  const frameMs = Math.min(100, Math.max(1, now - lastFrameTime))
+  const dt = Math.min(0.064, frameMs / 1000)
   lastFrameTime = now
+  updatePerformanceMode(frameMs, now)
 
   if (!reducedMotionQuery.matches) {
     const timeSinceScroll = now - lastScrollTime
@@ -398,28 +528,30 @@ function tick(now: number) {
   const velocityAlpha = 1 - Math.exp(-dt / 0.09)
   scrollVelocity += (0 - scrollVelocity) * velocityAlpha
 
-  root.style.setProperty('--master-progress', displayProgress.toFixed(5))
-  root.style.setProperty('--pointer-x', `${pointerX.toFixed(2)}px`)
-  root.style.setProperty('--pointer-y', `${pointerY.toFixed(2)}px`)
-  const cinematicPhase = displayProgress * Math.PI * 2
-  const cinematicX = Math.sin(cinematicPhase * 1.4) * 0.55 + clamp(scrollVelocity * 0.16, -0.35, 0.35)
-  const cinematicY = Math.cos(cinematicPhase * 1.1) * 0.38 + clamp(scrollVelocity * 0.08, -0.18, 0.18)
-  const cinematicScale = 1.015 + Math.sin(cinematicPhase * 0.85) * 0.00065 + clamp(Math.abs(scrollVelocity) * 0.00018, 0, 0.00045)
-  root.style.setProperty('--cinematic-x', `${cinematicX.toFixed(3)}px`)
-  root.style.setProperty('--cinematic-y', `${cinematicY.toFixed(3)}px`)
-  root.style.setProperty('--cinematic-scale', cinematicScale.toFixed(5))
-  root.style.setProperty('--kinetic-shift', `${clamp(scrollVelocity * 2.4, -5, 5).toFixed(2)}px`)
-  root.style.setProperty('--kinetic-blur', `${clamp(Math.abs(scrollVelocity) * 0.55, 0, 1.2).toFixed(2)}px`)
-  root.style.setProperty('--kinetic-track', `${(0.08 + clamp(Math.abs(scrollVelocity) * 0.008, 0, 0.035)).toFixed(3)}em`)
+  setRootProperty('--master-progress', displayProgress.toFixed(5))
+  setRootProperty('--pointer-x', `${pointerX.toFixed(2)}px`)
+  setRootProperty('--pointer-y', `${pointerY.toFixed(2)}px`)
+  if (!performanceLite) {
+    const cinematicPhase = displayProgress * Math.PI * 2
+    const cinematicX = Math.sin(cinematicPhase * 1.4) * 0.55 + clamp(scrollVelocity * 0.16, -0.35, 0.35)
+    const cinematicY = Math.cos(cinematicPhase * 1.1) * 0.38 + clamp(scrollVelocity * 0.08, -0.18, 0.18)
+    const cinematicScale = 1.015 + Math.sin(cinematicPhase * 0.85) * 0.00065 + clamp(Math.abs(scrollVelocity) * 0.00018, 0, 0.00045)
+    setRootProperty('--cinematic-x', `${cinematicX.toFixed(3)}px`)
+    setRootProperty('--cinematic-y', `${cinematicY.toFixed(3)}px`)
+    setRootProperty('--cinematic-scale', cinematicScale.toFixed(5))
+  }
+  setRootProperty('--kinetic-shift', `${clamp(scrollVelocity * 2.4, -5, 5).toFixed(2)}px`)
+  setRootProperty('--kinetic-blur', `${clamp(Math.abs(scrollVelocity) * 0.55, 0, 1.2).toFixed(2)}px`)
+  setRootProperty('--kinetic-track', `${(0.08 + clamp(Math.abs(scrollVelocity) * 0.008, 0, 0.035)).toFixed(3)}em`)
   const aiSignal = smoothstep(0.045, 0.29, displayProgress)
   const aiAccent = Math.sin(aiSignal * Math.PI)
   const pixelResolve = smoothstep(0.285, 0.48, displayProgress)
-  root.style.setProperty('--ai-sweep', `${(-65 + aiSignal * 230).toFixed(1)}%`)
-  root.style.setProperty('--ai-split', `${(aiAccent * 3.2).toFixed(2)}px`)
-  root.style.setProperty('--ai-accent-opacity', (aiAccent * 0.92).toFixed(3))
-  root.style.setProperty('--pixel-shift', `${((1 - pixelResolve) * 9).toFixed(2)}px`)
-  root.style.setProperty('--pixel-opacity', (0.14 + (1 - pixelResolve) * 0.58).toFixed(3))
-  root.style.setProperty('--pixel-size', `${(7 + (1 - pixelResolve) * 5).toFixed(2)}px`)
+  setRootProperty('--ai-sweep', `${(-65 + aiSignal * 230).toFixed(1)}%`)
+  setRootProperty('--ai-split', `${(aiAccent * 3.2).toFixed(2)}px`)
+  setRootProperty('--ai-accent-opacity', (aiAccent * 0.92).toFixed(3))
+  setRootProperty('--pixel-shift', `${((1 - pixelResolve) * 9).toFixed(2)}px`)
+  setRootProperty('--pixel-opacity', (0.14 + (1 - pixelResolve) * 0.58).toFixed(3))
+  setRootProperty('--pixel-size', `${(7 + (1 - pixelResolve) * 5).toFixed(2)}px`)
 
   if (!reducedMotionQuery.matches) {
     warmMedia(displayProgress)
@@ -427,7 +559,7 @@ function tick(now: number) {
     updateCopy(displayProgress)
     updatePhase(displayProgress)
   }
-  updateAudio(dt)
+  updateAudio(dt, now)
 
   if (needsAnotherFrame() && !document.hidden) {
     root.dataset.animating = 'true'
@@ -473,7 +605,13 @@ function initializeVideo(state: VideoState, index: number) {
   }
 
   state.element.addEventListener('loadedmetadata', onMetadata)
-  state.element.addEventListener('seeked', () => requestTick())
+  state.element.addEventListener('seeked', () => {
+    if (!state.awaitingFrame) {
+      state.presentedTime = null
+      recordSeekLatency(state, performance.now())
+    }
+    requestTick()
+  })
   state.element.addEventListener('error', () => {
     if (!state.element.currentSrc) return
     cancelFrameWatch(state)
@@ -492,10 +630,8 @@ function initializeVideo(state: VideoState, index: number) {
       if (!state.element.currentSrc) return
       root.classList.remove('media-fallback')
       root.classList.add('media-ready')
-      if (!warmedSecond) {
-        warmedSecond = true
-        loadVideo(videoStates[1])
-      }
+      loadVideo(videoStates[1], 'metadata')
+      scheduleSecondVideoWarmup()
       warmMedia(displayProgress)
       requestTick()
     })
@@ -550,6 +686,7 @@ async function activateOrigin() {
 
 function onVisibilityChange() {
   if (document.hidden) {
+    cancelSecondVideoWarmup()
     if (animationFrame) cancelAnimationFrame(animationFrame)
     animationFrame = 0
     resumeAfterVisibility = soundEnabled && !audio.paused
@@ -558,6 +695,7 @@ function onVisibilityChange() {
   } else {
     const shouldResume = resumeAfterVisibility && soundEnabled
     resumeAfterVisibility = false
+    if (videoStates[0].loaded && videoStates[1].loadMode !== 'auto') scheduleSecondVideoWarmup()
     if (shouldResume) {
       void (async () => {
         try {
@@ -602,8 +740,8 @@ function skipToFinal(event: MouseEvent) {
 function onReducedMotionChange() {
   root.classList.toggle('reduced-motion', reducedMotionQuery.matches)
   if (reducedMotionQuery.matches) {
-    warmedSecond = false
-    warmedThird = false
+    cancelSecondVideoWarmup()
+    setPerformanceLite(false, performance.now())
     videoStates.forEach((state) => {
       cancelFrameWatch(state)
       state.element.pause()
@@ -611,9 +749,14 @@ function onReducedMotionChange() {
       state.element.load()
       state.loaded = false
       state.loading = false
+      state.loadMode = 'none'
       state.pendingTime = null
       state.lastSeekAt = 0
+      state.latencySampledAt = 0
+      state.seekLatency = 48
       state.presentedTime = null
+      state.renderedOpacity = ''
+      state.renderedZIndex = ''
     })
     chapters.forEach((chapter) => setChapterAccessibility(chapter, true))
     root.classList.add('media-ready')
