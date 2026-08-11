@@ -799,8 +799,8 @@ button {
 .final-actions {
   position: relative;
   display: grid;
-  grid-template-columns: auto auto;
-  gap: .35rem 2rem;
+  grid-template-columns: 9.6rem 9.6rem;
+  gap: .4rem 1.35rem;
   align-items: center;
   justify-content: center;
   width: fit-content;
@@ -816,6 +816,21 @@ button {
   content: "";
   background: radial-gradient(ellipse at center, rgba(1, 4, 6, .8), rgba(1, 4, 6, .54) 43%, transparent 74%);
   pointer-events: none;
+}
+
+.final-actions::after {
+  position: absolute;
+  z-index: 2;
+  bottom: 19px;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  border: 1px solid rgba(210, 232, 243, .58);
+  content: "";
+  background: rgba(8, 15, 19, .84);
+  box-shadow: 0 0 11px rgba(174, 217, 239, .22);
+  pointer-events: none;
+  transform: translate(-50%, 50%) rotate(45deg);
 }
 
 .contact-button {
@@ -925,17 +940,57 @@ button {
 
 .final-actions .portfolio-link,
 .final-actions .replay-button {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
   justify-content: center;
-  min-width: 8.25rem;
+  width: 100%;
+  min-width: 0;
   min-height: 44px;
   border: 0;
-  border-bottom: 1px solid rgba(218, 235, 244, .3);
-  padding: .65rem 0;
+  padding: .65rem .9rem;
   background: transparent;
   color: rgba(246, 249, 251, .84);
   text-shadow: 0 1px 10px rgba(0, 0, 0, .92);
   white-space: nowrap;
   transition: color 180ms ease, border-color 180ms ease, transform 220ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.final-actions .portfolio-link::before,
+.final-actions .portfolio-link::after,
+.final-actions .replay-button::before,
+.final-actions .replay-button::after {
+  position: absolute;
+  content: "";
+  pointer-events: none;
+}
+
+.final-actions .portfolio-link::before,
+.final-actions .replay-button::before {
+  z-index: -2;
+  inset: 0;
+  background: rgba(207, 229, 240, .42);
+  filter: drop-shadow(0 0 7px rgba(165, 211, 234, .1));
+  transition: background-color 220ms ease, filter 220ms ease;
+}
+
+.final-actions .portfolio-link::after,
+.final-actions .replay-button::after {
+  z-index: -1;
+  inset: 1px;
+  background:
+    radial-gradient(circle at 8px 50%, rgba(211, 235, 246, .2) 0 1px, transparent 1.5px),
+    rgba(2, 6, 8, .76);
+}
+
+.final-actions .portfolio-link::before,
+.final-actions .portfolio-link::after {
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%);
+}
+
+.final-actions .replay-button::before,
+.final-actions .replay-button::after {
+  clip-path: polygon(10px 0, 100% 0, 100% 100%, 10px 100%, 0 50%);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -987,10 +1042,15 @@ button {
 
   .final-actions .portfolio-link:hover,
   .final-actions .replay-button:hover {
-    border-color: rgba(232, 244, 250, .78);
     background: transparent;
     color: #fff;
     transform: translateY(-1px);
+  }
+
+  .final-actions .portfolio-link:hover::before,
+  .final-actions .replay-button:hover::before {
+    background: rgba(226, 241, 248, .76);
+    filter: drop-shadow(0 0 9px rgba(183, 224, 244, .2));
   }
 }
 
