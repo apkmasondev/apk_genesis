@@ -9,6 +9,9 @@ type VideoState = {
   loading: boolean
   pendingTime: number | null
   lastSeekAt: number
+  presentedTime: number | null
+  awaitingFrame: boolean
+  frameCallbackId: number | null
 }
 
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value))
@@ -37,10 +40,26 @@ const FRAME = 1 / 24
 const mediaUrl = (path: string) => new URL(path, document.baseURI).href
 const audioSourceUrl = mediaUrl('audio/genesis-theme.m4a')
 
+function createVideoState(element: HTMLVideoElement, start: number, end: number, path: string): VideoState {
+  return {
+    element,
+    start,
+    end,
+    source: mediaUrl(path),
+    loaded: false,
+    loading: false,
+    pendingTime: null,
+    lastSeekAt: 0,
+    presentedTime: null,
+    awaitingFrame: false,
+    frameCallbackId: null,
+  }
+}
+
 const videoStates: VideoState[] = [
-  { element: videos[0], start: 0, end: 0.345, source: mediaUrl('media/genesis-01-birth.mp4'), loaded: false, loading: false, pendingTime: null, lastSeekAt: 0 },
-  { element: videos[1], start: 0.325, end: 0.675, source: mediaUrl('media/genesis-02-formation.mp4'), loaded: false, loading: false, pendingTime: null, lastSeekAt: 0 },
-  { element: videos[2], start: 0.655, end: 1, source: mediaUrl('media/genesis-03-ascension.mp4'), loaded: false, loading: false, pendingTime: null, lastSeekAt: 0 },
+  createVideoState(videos[0], 0, 0.345, 'media/genesis-01-birth.mp4'),
+  createVideoState(videos[1], 0.325, 0.675, 'media/genesis-02-formation.mp4'),
+  createVideoState(videos[2], 0.655, 1, 'media/genesis-03-ascension.mp4'),
 ]
 
 let runwayStart = 0
@@ -156,6 +175,28 @@ function videoOpacity(index: number, progress: number) {
   return smoothstep(0.655, 0.675, progress)
 }
 
+function cancelFrameWatch(state: VideoState) {
+  if (state.frameCallbackId !== null && typeof state.element.cancelVideoFrameCallback === 'function') {
+    state.element.cancelVideoFrameCallback(state.frameCallbackId)
+  }
+  state.frameCallbackId = null
+  state.awaitingFrame = false
+}
+
+function watchPresentedFrame(state: VideoState) {
+  const video = state.element
+  if (state.frameCallbackId !== null || typeof video.requestVideoFrameCallback !== 'function') return false
+
+  state.awaitingFrame = true
+  state.frameCallbackId = video.requestVideoFrameCallback((_now, metadata) => {
+    state.frameCallbackId = null
+    state.awaitingFrame = false
+    state.presentedTime = metadata.mediaTime
+    requestTick()
+  })
+  return true
+}
+
 function requestSeek(state: VideoState, desiredTime: number, now: number, opacity: number) {
   const video = state.element
   if (!state.loaded || video.readyState < HTMLMediaElement.HAVE_METADATA || opacity < 0.015) return
@@ -167,10 +208,13 @@ function requestSeek(state: VideoState, desiredTime: number, now: number, opacit
     ? clamp(Math.round(boundedTime / FRAME) * FRAME, 0, safeDuration)
     : boundedTime
   const minInterval = coarsePointerQuery.matches ? 46 : 32
-  if (video.seeking || now - state.lastSeekAt < minInterval) return
+  if (state.awaitingFrame && now - state.lastSeekAt > 140) cancelFrameWatch(state)
+  if (video.seeking || state.awaitingFrame || now - state.lastSeekAt < minInterval) return
 
-  const gap = state.pendingTime - video.currentTime
-  if (Math.abs(gap) < FRAME * 0.45) {
+  const displayedTime = clamp(state.presentedTime ?? video.currentTime, 0, safeDuration)
+  const gap = state.pendingTime - displayedTime
+  const tolerance = FRAME * (nearRest ? 1.05 : 0.45)
+  if (Math.abs(gap) < tolerance) {
     state.pendingTime = null
     return
   }
@@ -178,9 +222,11 @@ function requestSeek(state: VideoState, desiredTime: number, now: number, opacit
   state.lastSeekAt = now
   const nextTime = state.pendingTime
   state.pendingTime = null
+  const watchingFrame = watchPresentedFrame(state)
   try {
     video.currentTime = nextTime
   } catch {
+    if (watchingFrame) cancelFrameWatch(state)
     // Metadata can become temporarily unavailable during source selection.
   }
 }
@@ -323,7 +369,7 @@ function needsAnotherFrame() {
   const audioReactive = soundEnabled && !audio.paused && audioAnalyser !== null
   const haloSettling = audioEnergy > 0.002
   const pointerMoving = Math.abs(pointerTargetX - pointerX) > 0.01 || Math.abs(pointerTargetY - pointerY) > 0.01
-  const seekPending = videoStates.some((state) => state.element.seeking || state.pendingTime !== null)
+  const seekPending = videoStates.some((state) => state.element.seeking || state.awaitingFrame || state.pendingTime !== null)
   return progressMoving || audioMoving || audioReactive || haloSettling || pointerMoving || seekPending
 }
 
@@ -355,6 +401,13 @@ function tick(now: number) {
   root.style.setProperty('--master-progress', displayProgress.toFixed(5))
   root.style.setProperty('--pointer-x', `${pointerX.toFixed(2)}px`)
   root.style.setProperty('--pointer-y', `${pointerY.toFixed(2)}px`)
+  const cinematicPhase = displayProgress * Math.PI * 2
+  const cinematicX = Math.sin(cinematicPhase * 1.4) * 0.55 + clamp(scrollVelocity * 0.16, -0.35, 0.35)
+  const cinematicY = Math.cos(cinematicPhase * 1.1) * 0.38 + clamp(scrollVelocity * 0.08, -0.18, 0.18)
+  const cinematicScale = 1.015 + Math.sin(cinematicPhase * 0.85) * 0.00065 + clamp(Math.abs(scrollVelocity) * 0.00018, 0, 0.00045)
+  root.style.setProperty('--cinematic-x', `${cinematicX.toFixed(3)}px`)
+  root.style.setProperty('--cinematic-y', `${cinematicY.toFixed(3)}px`)
+  root.style.setProperty('--cinematic-scale', cinematicScale.toFixed(5))
   root.style.setProperty('--kinetic-shift', `${clamp(scrollVelocity * 2.4, -5, 5).toFixed(2)}px`)
   root.style.setProperty('--kinetic-blur', `${clamp(Math.abs(scrollVelocity) * 0.55, 0, 1.2).toFixed(2)}px`)
   root.style.setProperty('--kinetic-track', `${(0.08 + clamp(Math.abs(scrollVelocity) * 0.008, 0, 0.035)).toFixed(3)}em`)
@@ -410,10 +463,12 @@ function onResize() {
 function initializeVideo(state: VideoState, index: number) {
   const onMetadata = () => {
     if (!state.element.currentSrc) return
+    cancelFrameWatch(state)
     state.loaded = true
     state.loading = false
     state.element.pause()
     state.element.currentTime = 0
+    state.presentedTime = null
     requestTick()
   }
 
@@ -421,6 +476,9 @@ function initializeVideo(state: VideoState, index: number) {
   state.element.addEventListener('seeked', () => requestTick())
   state.element.addEventListener('error', () => {
     if (!state.element.currentSrc) return
+    cancelFrameWatch(state)
+    state.pendingTime = null
+    state.presentedTime = null
     state.loading = false
     root.classList.add('media-fallback')
     if (index === 0) {
@@ -547,6 +605,7 @@ function onReducedMotionChange() {
     warmedSecond = false
     warmedThird = false
     videoStates.forEach((state) => {
+      cancelFrameWatch(state)
       state.element.pause()
       state.element.removeAttribute('src')
       state.element.load()
@@ -554,6 +613,7 @@ function onReducedMotionChange() {
       state.loading = false
       state.pendingTime = null
       state.lastSeekAt = 0
+      state.presentedTime = null
     })
     chapters.forEach((chapter) => setChapterAccessibility(chapter, true))
     root.classList.add('media-ready')

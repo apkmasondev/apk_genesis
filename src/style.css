@@ -8,6 +8,9 @@
   --master-progress: 0;
   --pointer-x: 0px;
   --pointer-y: 0px;
+  --cinematic-x: 0px;
+  --cinematic-y: 0px;
+  --cinematic-scale: 1.015;
   --audio-energy: 0;
   --audio-visual-energy: 0;
   --ai-sweep: -55%;
@@ -257,7 +260,11 @@ button {
 
 .video-stack {
   z-index: 2;
-  transform: translate3d(var(--pointer-x), var(--pointer-y), 0) scale(1.015);
+  transform: translate3d(
+    calc(var(--pointer-x) + var(--cinematic-x)),
+    calc(var(--pointer-y) + var(--cinematic-y)),
+    0
+  ) scale(var(--cinematic-scale));
   transform-origin: center;
   will-change: transform;
 }
