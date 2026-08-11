@@ -173,7 +173,8 @@ button {
 }
 
 .sound-toggle:focus-visible {
-  outline: 0;
+  outline: 1px solid rgba(225, 238, 247, .92);
+  outline-offset: 5px;
 }
 
 .replay-button:focus-visible,
@@ -289,6 +290,10 @@ button {
 
 .media-ready .first-frame {
   opacity: 0;
+}
+
+.media-fallback .first-frame {
+  opacity: .42;
 }
 
 .reduced-poster {
@@ -619,7 +624,7 @@ button {
   align-items: center;
   justify-content: center;
   margin: 1.3rem 0 0;
-  color: rgba(218, 228, 234, .45);
+  color: rgba(218, 228, 234, .62);
   font-size: .56rem;
   letter-spacing: .18em;
 }
@@ -708,7 +713,7 @@ button {
 
 .capability-rail {
   margin: 1.5rem 0 0;
-  color: rgba(196, 211, 220, .48);
+  color: rgba(196, 211, 220, .64);
   font-size: clamp(.57rem, .65vw, .68rem);
   font-weight: 600;
   letter-spacing: .14em;
@@ -915,7 +920,7 @@ button {
 .final-actions .replay-button {
   justify-content: center;
   min-width: 8.25rem;
-  min-height: 42px;
+  min-height: 44px;
   border: 0;
   border-bottom: 1px solid rgba(218, 235, 244, .3);
   padding: .65rem 0;

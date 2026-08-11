@@ -35,6 +35,7 @@ const coarsePointerQuery = window.matchMedia('(pointer: coarse)')
 const finePointerQuery = window.matchMedia('(hover: hover) and (pointer: fine)')
 const FRAME = 1 / 24
 const mediaUrl = (path: string) => new URL(path, document.baseURI).href
+const audioSourceUrl = mediaUrl('audio/genesis-theme.m4a')
 
 const videoStates: VideoState[] = [
   { element: videos[0], start: 0, end: 0.345, source: mediaUrl('media/genesis-01-birth.mp4'), loaded: false, loading: false, pendingTime: null, lastSeekAt: 0 },
@@ -49,7 +50,6 @@ let displayProgress = 0
 let previousTarget = 0
 let lastFrameTime = performance.now()
 let animationFrame = 0
-let mediaReady = false
 let warmedSecond = false
 let warmedThird = false
 let lastScrollTime = performance.now()
@@ -63,7 +63,6 @@ let hasMeasured = false
 const audio = new Audio()
 audio.id = 'genesis-soundtrack'
 audio.hidden = true
-audio.src = mediaUrl('audio/genesis-theme.m4a')
 audio.preload = 'none'
 audio.loop = true
 audio.volume = 0
@@ -76,8 +75,32 @@ let audioSource: MediaElementAudioSourceNode | null = null
 let audioAnalyser: AnalyserNode | null = null
 let audioFrequencyData: Uint8Array<ArrayBuffer> | null = null
 let audioAnalyserAttempted = false
+let audioSourceLoaded = false
+let soundOperation = 0
 let resumeAfterVisibility = false
 document.body.append(audio)
+
+function setChapterAccessibility(chapter: HTMLElement, accessible: boolean) {
+  const hidden = !accessible
+  const alreadySynced = chapter.inert === hidden
+    && (hidden ? chapter.getAttribute('aria-hidden') === 'true' : !chapter.hasAttribute('aria-hidden'))
+  if (alreadySynced) return
+
+  if (hidden && chapter.contains(document.activeElement)) {
+    (document.activeElement as HTMLElement).blur()
+  }
+  chapter.inert = hidden
+  if (hidden) chapter.setAttribute('aria-hidden', 'true')
+  else chapter.removeAttribute('aria-hidden')
+}
+
+function ensureAudioSource() {
+  if (audioSourceLoaded) return
+  audioSourceLoaded = true
+  audio.preload = 'auto'
+  audio.src = audioSourceUrl
+  audio.load()
+}
 
 function measure(preserveProgress = false) {
   const progressBeforeResize = targetProgress
@@ -113,7 +136,7 @@ function loadVideo(state: VideoState, priority: 'auto' | 'metadata' = 'auto') {
 }
 
 function warmMedia(progress: number) {
-  if (!warmedSecond && (mediaReady || progress > 0.08)) {
+  if (!warmedSecond && progress > 0.1) {
     warmedSecond = true
     loadVideo(videoStates[1])
   }
@@ -193,7 +216,9 @@ function updateCopy(progress: number) {
     const entrance = clamp((progress - start) / 0.055)
     chapter.style.setProperty('--chapter-opacity', opacity.toFixed(4))
     chapter.style.setProperty('--chapter-y', `${(1 - smoothstep(0, 1, entrance)) * 16}px`)
-    chapter.classList.toggle('is-interactive', opacity > 0.72)
+    const interactive = opacity > 0.72
+    chapter.classList.toggle('is-interactive', interactive)
+    setChapterAccessibility(chapter, interactive)
   }
 
   const coreIsActive = progress < 0.035
@@ -210,8 +235,8 @@ function updatePhase(progress: number) {
 }
 
 async function ensureAudioAnalyser() {
+  if (audioContext?.state === 'suspended') await audioContext.resume()
   if (audioAnalyser && audioContext) {
-    if (audioContext.state === 'suspended') await audioContext.resume()
     return
   }
   if (audioAnalyserAttempted) return
@@ -229,11 +254,14 @@ async function ensureAudioAnalyser() {
     await audioContext.resume()
   } catch {
     // The soundtrack remains fully functional when Web Audio is unavailable.
-    if (audioSource && audioContext) {
-      try { audioSource.connect(audioContext.destination) } catch { /* Already connected. */ }
-    }
+    try { audioAnalyser?.disconnect() } catch { /* Node was not connected. */ }
+    try { audioSource?.disconnect() } catch { /* Node was not connected. */ }
     audioAnalyser = null
     audioFrequencyData = null
+    if (audioSource && audioContext) {
+      audioSource.connect(audioContext.destination)
+      if (audioContext.state === 'suspended') await audioContext.resume()
+    }
   }
 }
 
@@ -279,7 +307,7 @@ function updateAudio(dt: number) {
 
   if (!soundEnabled && audioVolume === 0 && !audio.paused) {
     audio.pause()
-    if (audioContext?.state === 'running') void audioContext.suspend()
+    if (audioContext?.state === 'running') void audioContext.suspend().catch(() => {})
   }
 }
 
@@ -370,6 +398,7 @@ function onResize() {
 
 function initializeVideo(state: VideoState, index: number) {
   const onMetadata = () => {
+    if (!state.element.currentSrc) return
     state.loaded = true
     state.loading = false
     state.element.pause()
@@ -380,7 +409,9 @@ function initializeVideo(state: VideoState, index: number) {
   state.element.addEventListener('loadedmetadata', onMetadata)
   state.element.addEventListener('seeked', () => requestTick())
   state.element.addEventListener('error', () => {
+    if (!state.element.currentSrc) return
     state.loading = false
+    root.classList.add('media-fallback')
     if (index === 0) {
       loader.querySelector('span')!.textContent = 'Visual ready in static mode'
       window.setTimeout(() => root.classList.add('media-ready'), 800)
@@ -389,15 +420,17 @@ function initializeVideo(state: VideoState, index: number) {
 
   if (index === 0) {
     state.element.addEventListener('loadeddata', () => {
-      mediaReady = true
+      if (!state.element.currentSrc) return
+      root.classList.remove('media-fallback')
       root.classList.add('media-ready')
       warmMedia(displayProgress)
       requestTick()
-    }, { once: true })
+    })
   }
 }
 
 async function setSound(enabled: boolean) {
+  const operation = ++soundOperation
   soundEnabled = enabled
   soundButton.setAttribute('aria-pressed', String(soundEnabled))
   soundButton.setAttribute('aria-label', soundEnabled ? 'Turn soundtrack off' : 'Turn soundtrack on')
@@ -407,9 +440,13 @@ async function setSound(enabled: boolean) {
   if (soundEnabled) {
     audioTarget = 0.28
     try {
+      ensureAudioSource()
       await ensureAudioAnalyser()
+      if (operation !== soundOperation || !soundEnabled) return
       await audio.play()
+      if (operation !== soundOperation || !soundEnabled) audio.pause()
     } catch {
+      if (operation !== soundOperation) return
       soundEnabled = false
       audioTarget = 0
       soundButton.setAttribute('aria-pressed', 'false')
@@ -444,13 +481,21 @@ function onVisibilityChange() {
     animationFrame = 0
     resumeAfterVisibility = soundEnabled && !audio.paused
     audio.pause()
-    if (audioContext?.state === 'running') void audioContext.suspend()
+    if (audioContext?.state === 'running') void audioContext.suspend().catch(() => {})
   } else {
-    if (resumeAfterVisibility && soundEnabled) {
-      void ensureAudioAnalyser()
-      void audio.play()
-    }
+    const shouldResume = resumeAfterVisibility && soundEnabled
     resumeAfterVisibility = false
+    if (shouldResume) {
+      void (async () => {
+        try {
+          ensureAudioSource()
+          await ensureAudioAnalyser()
+          if (soundEnabled) await audio.play()
+        } catch {
+          if (soundEnabled) await setSound(false)
+        }
+      })()
+    }
     updateScrollTarget()
     requestTick()
   }
@@ -492,10 +537,15 @@ function onReducedMotionChange() {
       state.element.load()
       state.loaded = false
       state.loading = false
+      state.pendingTime = null
+      state.lastSeekAt = 0
     })
+    chapters.forEach((chapter) => setChapterAccessibility(chapter, true))
     root.classList.add('media-ready')
   } else {
+    root.classList.remove('media-ready', 'media-fallback')
     loadVideo(videoStates[0])
+    updateCopy(targetProgress)
   }
   measure()
   requestTick()
@@ -507,6 +557,7 @@ root.classList.toggle('reduced-motion', reducedMotionQuery.matches)
 
 if (reducedMotionQuery.matches) {
   root.classList.add('media-ready')
+  chapters.forEach((chapter) => setChapterAccessibility(chapter, true))
 } else {
   loadVideo(videoStates[0])
   updateCopy(0)
