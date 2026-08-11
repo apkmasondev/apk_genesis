@@ -162,7 +162,10 @@ function requestSeek(state: VideoState, desiredTime: number, now: number, opacit
 
   const safeDuration = Math.max(0, video.duration - FRAME * 0.5)
   const boundedTime = clamp(desiredTime, 0, safeDuration)
-  state.pendingTime = clamp(Math.round(boundedTime / FRAME) * FRAME, 0, safeDuration)
+  const nearRest = now - lastScrollTime > 120 && Math.abs(targetProgress - displayProgress) < 0.0025
+  state.pendingTime = nearRest
+    ? clamp(Math.round(boundedTime / FRAME) * FRAME, 0, safeDuration)
+    : boundedTime
   const minInterval = coarsePointerQuery.matches ? 46 : 32
   if (video.seeking || now - state.lastSeekAt < minInterval) return
 
@@ -330,13 +333,14 @@ function tick(now: number) {
   lastFrameTime = now
 
   if (!reducedMotionQuery.matches) {
-    const settling = now - lastScrollTime > 90
-    const tau = settling
-      ? (coarsePointerQuery.matches ? 0.055 : 0.04)
-      : (coarsePointerQuery.matches ? 0.15 : 0.115)
+    const timeSinceScroll = now - lastScrollTime
+    const baseTau = coarsePointerQuery.matches ? 0.15 : 0.115
+    const restingTau = coarsePointerQuery.matches ? 0.065 : 0.05
+    const settleBlend = smoothstep(90, coarsePointerQuery.matches ? 220 : 190, timeSinceScroll)
+    const tau = baseTau + (restingTau - baseTau) * settleBlend
     const alpha = 1 - Math.exp(-dt / tau)
     displayProgress += (targetProgress - displayProgress) * alpha
-    const snapThreshold = settling ? 0.00035 : 0.00005
+    const snapThreshold = 0.00005 + 0.0002 * settleBlend
     if (Math.abs(targetProgress - displayProgress) < snapThreshold) displayProgress = targetProgress
   } else {
     displayProgress = targetProgress
