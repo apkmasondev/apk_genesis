@@ -161,7 +161,8 @@ function requestSeek(state: VideoState, desiredTime: number, now: number, opacit
   if (!state.loaded || video.readyState < HTMLMediaElement.HAVE_METADATA || opacity < 0.015) return
 
   const safeDuration = Math.max(0, video.duration - FRAME * 0.5)
-  state.pendingTime = clamp(desiredTime, 0, safeDuration)
+  const boundedTime = clamp(desiredTime, 0, safeDuration)
+  state.pendingTime = clamp(Math.round(boundedTime / FRAME) * FRAME, 0, safeDuration)
   const minInterval = coarsePointerQuery.matches ? 46 : 32
   if (video.seeking || now - state.lastSeekAt < minInterval) return
 
@@ -217,8 +218,10 @@ function updateCopy(progress: number) {
     chapter.style.setProperty('--chapter-opacity', opacity.toFixed(4))
     chapter.style.setProperty('--chapter-y', `${(1 - smoothstep(0, 1, entrance)) * 16}px`)
     const interactive = opacity > 0.72
-    chapter.classList.toggle('is-interactive', interactive)
-    setChapterAccessibility(chapter, interactive)
+    if (chapter.classList.contains('is-interactive') !== interactive) {
+      chapter.classList.toggle('is-interactive', interactive)
+      setChapterAccessibility(chapter, interactive)
+    }
   }
 
   const coreIsActive = progress < 0.035
@@ -327,10 +330,14 @@ function tick(now: number) {
   lastFrameTime = now
 
   if (!reducedMotionQuery.matches) {
-    const tau = coarsePointerQuery.matches ? 0.15 : 0.115
+    const settling = now - lastScrollTime > 90
+    const tau = settling
+      ? (coarsePointerQuery.matches ? 0.055 : 0.04)
+      : (coarsePointerQuery.matches ? 0.15 : 0.115)
     const alpha = 1 - Math.exp(-dt / tau)
     displayProgress += (targetProgress - displayProgress) * alpha
-    if (Math.abs(targetProgress - displayProgress) < 0.00005) displayProgress = targetProgress
+    const snapThreshold = settling ? 0.00035 : 0.00005
+    if (Math.abs(targetProgress - displayProgress) < snapThreshold) displayProgress = targetProgress
   } else {
     displayProgress = targetProgress
   }
@@ -423,6 +430,10 @@ function initializeVideo(state: VideoState, index: number) {
       if (!state.element.currentSrc) return
       root.classList.remove('media-fallback')
       root.classList.add('media-ready')
+      if (!warmedSecond) {
+        warmedSecond = true
+        loadVideo(videoStates[1])
+      }
       warmMedia(displayProgress)
       requestTick()
     })
