@@ -583,7 +583,8 @@ function onScroll() {
   const now = performance.now()
   const elapsed = Math.max(16, now - lastScrollTime)
   updateScrollTarget()
-  if (targetProgress < 0.003 && previousTarget > 0.003) introDismissed = false
+  if (targetProgress > 0) introDismissed = true
+  else if (previousTarget > 0) introDismissed = false
   const delta = targetProgress - previousTarget
   scrollVelocity = clamp((delta / elapsed) * 1900, -2.5, 2.5)
   previousTarget = targetProgress
