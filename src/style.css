@@ -568,6 +568,7 @@ button {
   width: auto;
   text-align: center;
   transform: translate3d(-50%, var(--chapter-y), 0);
+  transition: opacity 180ms ease, transform 260ms cubic-bezier(.22, 1, .36, 1);
 }
 
 .chapter-pixels,

@@ -96,6 +96,7 @@ let slowFrameScore = 0
 let stableFrameCount = 0
 let performanceLiteSince = 0
 let lastAudioEnergyAt = performance.now()
+let introDismissed = false
 const rootStyleCache = new Map<string, string>()
 root.dataset.performance = 'full'
 
@@ -340,6 +341,8 @@ function updateVideos(progress: number, now: number) {
 }
 
 function chapterOpacity(element: HTMLElement, progress: number) {
+  if (introDismissed && element.classList.contains('chapter-intro')) return 0
+
   const start = Number(element.dataset.start)
   const end = Number(element.dataset.end)
   const span = end - start
@@ -580,6 +583,7 @@ function onScroll() {
   const now = performance.now()
   const elapsed = Math.max(16, now - lastScrollTime)
   updateScrollTarget()
+  if (targetProgress < 0.003 && previousTarget > 0.003) introDismissed = false
   const delta = targetProgress - previousTarget
   scrollVelocity = clamp((delta / elapsed) * 1900, -2.5, 2.5)
   previousTarget = targetProgress
@@ -674,7 +678,9 @@ function toggleSound() {
 }
 
 async function activateOrigin() {
+  introDismissed = true
   root.classList.add('origin-activated')
+  requestTick()
   if (!soundEnabled) await setSound(true)
 
   const destination = runwayStart + runwayLength * 0.055
@@ -790,7 +796,10 @@ document.addEventListener('visibilitychange', onVisibilityChange)
 soundButton.addEventListener('click', () => void toggleSound())
 originCore.addEventListener('click', () => void activateOrigin())
 skipLink.addEventListener('click', skipToFinal)
-replayButton.addEventListener('click', () => window.scrollTo({ top: runwayStart, behavior: reducedMotionQuery.matches ? 'auto' : 'smooth' }))
+replayButton.addEventListener('click', () => {
+  introDismissed = false
+  window.scrollTo({ top: runwayStart, behavior: reducedMotionQuery.matches ? 'auto' : 'smooth' })
+})
 reducedMotionQuery.addEventListener('change', onReducedMotionChange)
 
 requestTick()
