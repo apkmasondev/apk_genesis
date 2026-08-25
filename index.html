@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-motion="cinematic" data-rendition="wide">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -24,6 +24,30 @@
     <meta name="twitter:image" content="https://apkmason.dev/apk_genesis/og.png" />
     <meta name="twitter:image:alt" content="APK Genesis — AI, Pixels and Kinetics" />
     <title>APK://GENESIS — AI · Pixels · Kinetics</title>
+
+    <script>
+      /*
+        Delivery mode is resolved before the stylesheet paints, so the static
+        layout never flashes the cinematic one and the module bundle reads a
+        decision that is already final.
+
+        rendition  wide = 16:9. tall = 9:15 centre crop for portrait phones,
+                   where the wide file would have been mostly cropped away by
+                   object-fit: cover and its extra pixels paid for nothing.
+        motion     static = no video download at all, for reduced-motion users
+                   and for anyone on a metered Save-Data connection.
+      */
+      (function () {
+        var root = document.documentElement
+        var connection = navigator.connection
+        root.dataset.rendition =
+          matchMedia('(max-width: 700px) and (orientation: portrait)').matches ? 'tall' : 'wide'
+        root.dataset.motion =
+          matchMedia('(prefers-reduced-motion: reduce)').matches || (connection && connection.saveData)
+            ? 'static'
+            : 'cinematic'
+      })()
+    </script>
   </head>
   <body>
     <a class="skip-link" href="#genesis-end">Skip the cinematic sequence</a>
@@ -43,13 +67,17 @@
         <span id="genesis-end" class="skip-target" tabindex="-1">Final APK identity</span>
         <div class="stage">
           <div class="visual-field" aria-hidden="true">
-            <img class="first-frame" src="media/genesis-first-frame.webp" alt="" fetchpriority="high" />
-            <img class="reduced-poster" src="media/genesis-poster.webp" alt="" />
-            <div class="video-stack">
-              <video muted playsinline preload="auto" disablepictureinpicture disableremoteplayback tabindex="-1"></video>
-              <video muted playsinline preload="none" disablepictureinpicture disableremoteplayback tabindex="-1"></video>
-              <video muted playsinline preload="none" disablepictureinpicture disableremoteplayback tabindex="-1"></video>
-            </div>
+            <video
+              class="scene"
+              poster="media/genesis-first-frame.webp"
+              muted
+              playsinline
+              preload="auto"
+              disablepictureinpicture
+              disableremoteplayback
+              tabindex="-1"
+            ></video>
+            <img class="scene-still" src="media/genesis-poster.webp" alt="" decoding="async" />
             <div class="ambient-glow"></div>
             <div class="vignette"></div>
             <div class="grain"></div>
@@ -119,15 +147,14 @@
           </aside>
         </div>
       </section>
-
     </main>
 
     <noscript>
       <style>
-        .loader, .video-stack, .first-frame, .phase-meter { display: none !important; }
+        .loader, .scene, .phase-meter { display: none !important; }
         .runway { height: auto !important; }
         .stage { position: relative !important; min-height: 100vh; height: auto !important; }
-        .reduced-poster { display: block !important; opacity: .5 !important; position: fixed !important; }
+        .scene-still { display: block !important; opacity: .5 !important; position: fixed !important; }
         .copy-stage { position: relative !important; padding: 18vh 7vw 10vh !important; }
         .chapter { position: relative !important; opacity: 1 !important; transform: none !important; min-height: 55vh; }
       </style>

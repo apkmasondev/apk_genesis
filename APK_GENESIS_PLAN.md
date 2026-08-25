@@ -1,5 +1,31 @@
 # APK://GENESIS — Implementation Plan
 
+## 0a. Revision — delivery decisions superseded
+
+Everything below is the original plan and still describes the intent, the copy
+and the choreography accurately. Three of its **delivery** decisions were
+measured against real encodes and real devices and did not survive; the code is
+authoritative where they disagree.
+
+| Plan said | What was measured | What ships |
+| --- | --- | --- |
+| §3 — encode all-intra (`-g 1`), never below 720p | GOP=1 at 720p is **17.2 MB** for the sequence, 9.5 MB even at 540p. All-intra buys nothing once the seek is snapped to a frame boundary, because the cost of a scrub is the browser's seek pipeline, not the four to eight frames a short GOP has to decode. | One master, `-g 8` with B-frames, at 20 fps (wide) and 16 fps (tall) |
+| §7 — three stacked `<video>` elements, not one stitched runtime video | Three elements means three live decoders, three buffers and a cross-fade the compositor has to blend every frame — the single largest mobile cost in the old build. | One `<video>`. The two cross-fades are rendered **into** the master by `xfade`, so the dissolve is free at runtime |
+| §9 — let `object-fit: cover` crop the 16:9 video on portrait phones | On a 390×844 phone, cover throws away roughly 74% of every frame that was paid for, and stretches the surviving ~330 px across 1170 device pixels | A second 9:15 centre-crop rendition (`genesis-tall.mp4`) selected before first paint |
+
+Net effect on what a visitor downloads:
+
+| | before | after |
+| --- | --- | --- |
+| scene video, desktop | 13.9 MB (3 files) | 4.2 MB |
+| scene video, portrait phone | 13.9 MB (3 files) | 2.3 MB |
+| soundtrack (lazy) | 2.5 MB | 2.1 MB |
+
+`tools/build-media.sh` regenerates every delivery asset from the archival
+masters and is the only place the encode settings live.
+
+---
+
 ## 0. Project identity
 
 **Name:** APK://GENESIS  

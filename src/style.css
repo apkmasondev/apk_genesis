@@ -241,10 +241,8 @@ button {
 }
 
 .visual-field,
-.video-stack,
-.video-stack video,
-.first-frame,
-.reduced-poster,
+.scene,
+.scene-still,
 .ambient-glow,
 .vignette,
 .grain,
@@ -258,7 +256,22 @@ button {
   background: #020304;
 }
 
-.video-stack {
+.scene,
+.scene-still {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 50%;
+  border: 0;
+  background: #020304;
+}
+
+/*
+  The scene carries the cinematic drift on its own, so the visual field needs a
+  single promoted layer instead of a wrapper plus three cross-faded videos. Its
+  own poster attribute covers the gap before the first frame decodes.
+*/
+.scene {
   z-index: 2;
   transform: translate3d(
     calc(var(--pointer-x) + var(--cinematic-x)),
@@ -269,44 +282,19 @@ button {
   will-change: transform;
 }
 
-.video-stack video,
-.first-frame,
-.reduced-poster {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: 50% 50%;
-  border: 0;
-  background: #020304;
-}
-
-.video-stack video {
-  opacity: 0;
-  will-change: opacity;
-}
-
-.video-stack video:first-child {
-  opacity: 1;
-}
-
-.first-frame {
-  z-index: 1;
-  opacity: 1;
-  transition: opacity 700ms ease;
-}
-
-.media-ready .first-frame {
-  opacity: 0;
-}
-
-.media-fallback .first-frame {
-  opacity: .42;
-}
-
-.reduced-poster {
+.scene-still {
   z-index: 1;
   display: none;
   opacity: .48;
+}
+
+.media-fallback .scene {
+  display: none;
+}
+
+.media-fallback .scene-still {
+  display: block;
+  opacity: .55;
 }
 
 .ambient-glow {
@@ -314,10 +302,15 @@ button {
   background:
     radial-gradient(circle at calc(50% + var(--pointer-x)) calc(50% + var(--pointer-y)), rgba(145, 196, 226, .07), transparent 23%),
     linear-gradient(180deg, rgba(2, 3, 4, .16), transparent 35%, rgba(2, 3, 4, .18));
-  mix-blend-mode: screen;
   pointer-events: none;
 }
 
+/*
+  Both halos animate every frame from the audio analyser. A `filter: blur()` on
+  an animating element is re-run by the rasteriser on each of those frames, so
+  the softness lives in the gradient stops instead — free, and identical to look
+  at over near-black footage.
+*/
 .ambient-glow::before {
   position: absolute;
   top: calc(50% + var(--pointer-y));
@@ -326,8 +319,7 @@ button {
   aspect-ratio: 1;
   border-radius: 50%;
   content: "";
-  background: radial-gradient(circle, rgba(218, 242, 255, .42), rgba(145, 205, 237, .16) 28%, rgba(94, 163, 201, .055) 48%, transparent 70%);
-  filter: blur(12px);
+  background: radial-gradient(circle, rgba(218, 242, 255, .4) 0 6%, rgba(145, 205, 237, .16) 30%, rgba(94, 163, 201, .055) 50%, transparent 72%);
   opacity: clamp(0, calc(var(--audio-visual-energy) * .78), .68);
   transform: translate(-50%, -50%) scale(calc(.82 + var(--audio-visual-energy) * .42));
   transform-origin: center;
@@ -342,8 +334,7 @@ button {
   aspect-ratio: 1;
   border-radius: 50%;
   content: "";
-  background: radial-gradient(circle, transparent 0 52%, rgba(160, 218, 247, .2) 57%, rgba(113, 183, 220, .08) 61%, transparent 68%);
-  filter: blur(5px);
+  background: radial-gradient(circle, transparent 0 50%, rgba(160, 218, 247, .18) 57%, rgba(113, 183, 220, .07) 62%, transparent 70%);
   opacity: clamp(0, calc(var(--audio-visual-energy) * 1.15), .58);
   transform: translate(-50%, -50%) scale(calc(.88 + var(--audio-visual-energy) * .34));
   transform-origin: center;
@@ -365,16 +356,7 @@ button {
     repeating-linear-gradient(17deg, transparent 0 3px, rgba(255, 255, 255, .12) 3.4px 3.8px, transparent 4.2px 7px),
     repeating-linear-gradient(103deg, transparent 0 5px, rgba(197, 224, 239, .08) 5.3px 5.7px, transparent 6px 9px);
   background-size: 19px 23px, 29px 31px;
-  mix-blend-mode: soft-light;
   pointer-events: none;
-}
-
-.performance-lite .ambient-glow {
-  mix-blend-mode: normal;
-}
-
-.performance-lite .ambient-glow::before {
-  filter: blur(8px);
 }
 
 .performance-lite .ambient-glow::after {
@@ -382,8 +364,13 @@ button {
 }
 
 .performance-lite .grain {
-  opacity: .025;
-  mix-blend-mode: normal;
+  opacity: .022;
+}
+
+.performance-lite .chapter-kinetics h2,
+.performance-lite .chapter-ai h1::before,
+.performance-lite .chapter-ai h1::after {
+  filter: none;
 }
 
 .loader {
@@ -722,8 +709,18 @@ button {
 
 .chapter-kinetics h2 {
   letter-spacing: var(--kinetic-track);
-  filter: blur(var(--kinetic-blur));
   transform: translate3d(0, var(--kinetic-shift), 0);
+}
+
+/*
+  A live blur repaints every glyph of display-sized text on every frame of the
+  scroll. That is affordable on a pointer device and never affordable on a
+  phone, where the letter-spacing and offset alone read as the same idea.
+*/
+@media (hover: hover) and (pointer: fine) {
+  .chapter-kinetics h2 {
+    filter: blur(var(--kinetic-blur));
+  }
 }
 
 .chapter-copy {
@@ -1263,97 +1260,103 @@ button {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
+/*
+  Static delivery. The document carries data-motion="static" whenever the scene
+  video is deliberately not downloaded: a reduced-motion preference, or a
+  Save-Data connection. Save-Data is invisible to CSS, which is why the mode is
+  an attribute set before first paint rather than a media query.
+*/
+[data-motion="static"] {
+  scroll-behavior: auto;
+}
 
+[data-motion="static"] .runway {
+  height: auto;
+}
+
+[data-motion="static"] .stage {
+  position: relative;
+  height: auto;
+  min-height: 100svh;
+  overflow: visible;
+  contain: none;
+}
+
+[data-motion="static"] .visual-field {
+  position: fixed;
+  opacity: .66;
+}
+
+[data-motion="static"] .scene,
+[data-motion="static"] .loader,
+[data-motion="static"] .phase-meter,
+[data-motion="static"] .origin-core {
+  display: none;
+}
+
+[data-motion="static"] .scene-still {
+  display: block;
+}
+
+[data-motion="static"] .copy-stage {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  gap: 9rem;
+  padding: 20vh clamp(1.4rem, 7vw, 8rem) 14vh;
+}
+
+[data-motion="static"] .chapter,
+[data-motion="static"] .chapter-intro,
+[data-motion="static"] .chapter-pixels,
+[data-motion="static"] .chapter-about,
+[data-motion="static"] .chapter-final {
+  position: relative;
+  inset: auto;
+  width: min(42rem, 100%);
+  min-height: 42vh;
+  opacity: 1;
+  text-align: left;
+  transform: none;
+  will-change: auto;
+}
+
+[data-motion="static"] .chapter-intro {
+  min-height: 30vh;
+}
+
+[data-motion="static"] .chapter-final {
+  min-height: 70vh;
+  text-align: center;
+  justify-self: center;
+}
+
+[data-motion="static"] .chapter-final .replay-button {
+  display: none;
+}
+
+[data-motion="static"] .final-action {
+  pointer-events: auto;
+}
+
+[data-motion="static"] .chapter-kinetics h2 {
+  filter: none;
+  transform: none;
+}
+
+[data-motion="static"] .chapter-ai h1::before,
+[data-motion="static"] .chapter-ai h1::after,
+[data-motion="static"] .chapter-pixels h2::after {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
-  }
-
-  .runway {
-    height: auto;
-  }
-
-  .stage {
-    position: relative;
-    height: auto;
-    min-height: 100svh;
-    overflow: visible;
-    contain: none;
-  }
-
-  .visual-field {
-    position: fixed;
-    opacity: .66;
-  }
-
-  .video-stack,
-  .first-frame,
-  .loader,
-  .phase-meter,
-  .origin-core {
-    display: none;
-  }
-
-  .reduced-poster {
-    display: block;
-  }
-
-  .copy-stage {
-    position: relative;
-    z-index: 10;
-    display: grid;
-    gap: 9rem;
-    padding: 20vh clamp(1.4rem, 7vw, 8rem) 14vh;
-  }
-
-  .chapter,
-  .chapter-intro,
-  .chapter-pixels,
-  .chapter-about,
-  .chapter-final {
-    position: relative;
-    inset: auto;
-    width: min(42rem, 100%);
-    min-height: 42vh;
-    opacity: 1;
-    text-align: left;
-    transform: none;
-  }
-
-  .chapter-intro {
-    min-height: 30vh;
-  }
-
-  .chapter-final {
-    min-height: 70vh;
-    text-align: center;
-    justify-self: center;
-  }
-
-  .chapter-final .replay-button {
-    display: none;
-  }
-
-  .final-action {
-    pointer-events: auto;
-  }
-
-  .chapter-kinetics h2 {
-    filter: none;
-    transform: none;
-  }
-
-  .chapter-ai h1::before,
-  .chapter-ai h1::after,
-  .chapter-pixels h2::after {
-    display: none;
   }
 }
 
